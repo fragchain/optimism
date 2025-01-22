@@ -23,7 +23,11 @@ type CrossUnsafeDeps interface {
 	UpdateCrossUnsafe(chain eth.ChainID, crossUnsafe types.BlockSeal) error
 }
 
-func CrossUnsafeUpdate(logger log.Logger, chainID eth.ChainID, d CrossUnsafeDeps) error {
+type CrossUnsafeMetrics interface {
+	RecordCrossUnsafeRef(ref eth.L2BlockRef)
+}
+
+func CrossUnsafeUpdate(logger log.Logger, chainID eth.ChainID, d CrossUnsafeDeps, m CrossUnsafeMetrics) error {
 	var candidate types.BlockSeal
 	var execMsgs []*types.ExecutingMessage
 
@@ -69,6 +73,12 @@ func CrossUnsafeUpdate(logger log.Logger, chainID eth.ChainID, d CrossUnsafeDeps
 	if err := d.UpdateCrossUnsafe(chainID, candidate); err != nil {
 		return fmt.Errorf("failed to update cross-unsafe head to %s: %w", candidate, err)
 	}
+	m.RecordCrossUnsafeRef(eth.L2BlockRef{
+		Number: candidate.Number,
+		Time:   candidate.Timestamp,
+		Hash:   candidate.Hash,
+	})
+
 	return nil
 }
 
@@ -76,6 +86,7 @@ type CrossUnsafeWorker struct {
 	logger  log.Logger
 	chainID eth.ChainID
 	d       CrossUnsafeDeps
+	m       CrossUnsafeMetrics
 }
 
 func (c *CrossUnsafeWorker) OnEvent(ev event.Event) bool {
@@ -84,7 +95,7 @@ func (c *CrossUnsafeWorker) OnEvent(ev event.Event) bool {
 		if x.ChainID != c.chainID {
 			return false
 		}
-		if err := CrossUnsafeUpdate(c.logger, c.chainID, c.d); err != nil {
+		if err := CrossUnsafeUpdate(c.logger, c.chainID, c.d, c.m); err != nil {
 			if errors.Is(err, types.ErrFuture) {
 				c.logger.Debug("Worker awaits additional blocks", "err", err)
 			} else {
@@ -99,11 +110,12 @@ func (c *CrossUnsafeWorker) OnEvent(ev event.Event) bool {
 
 var _ event.Deriver = (*CrossUnsafeWorker)(nil)
 
-func NewCrossUnsafeWorker(logger log.Logger, chainID eth.ChainID, d CrossUnsafeDeps) *CrossUnsafeWorker {
+func NewCrossUnsafeWorker(logger log.Logger, chainID eth.ChainID, d CrossUnsafeDeps, m CrossUnsafeMetrics) *CrossUnsafeWorker {
 	logger = logger.New("chain", chainID)
 	return &CrossUnsafeWorker{
 		logger:  logger,
 		chainID: chainID,
 		d:       d,
+		m:       m,
 	}
 }

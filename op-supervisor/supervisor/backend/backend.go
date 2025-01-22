@@ -181,12 +181,12 @@ func (su *SupervisorBackend) initResources(ctx context.Context, cfg *config.Conf
 	eventOpts := event.DefaultRegisterOpts()
 	// initialize all cross-unsafe processors
 	for _, chainID := range chains {
-		worker := cross.NewCrossUnsafeWorker(su.logger, chainID, su.chainDBs)
+		worker := cross.NewCrossUnsafeWorker(su.logger, chainID, su.chainDBs, newChainMetrics(chainID, su.m))
 		su.eventSys.Register(fmt.Sprintf("cross-unsafe-%s", chainID), worker, eventOpts)
 	}
 	// initialize all cross-safe processors
 	for _, chainID := range chains {
-		worker := cross.NewCrossSafeWorker(su.logger, chainID, su.chainDBs)
+		worker := cross.NewCrossSafeWorker(su.logger, chainID, su.chainDBs, newChainMetrics(chainID, su.m))
 		su.eventSys.Register(fmt.Sprintf("cross-safe-%s", chainID), worker, eventOpts)
 	}
 	// For each chain initialize a chain processor service,

@@ -27,7 +27,11 @@ type CrossSafeDeps interface {
 	UpdateCrossSafe(chain eth.ChainID, l1View eth.BlockRef, lastCrossDerived eth.BlockRef) error
 }
 
-func CrossSafeUpdate(logger log.Logger, chainID eth.ChainID, d CrossSafeDeps) error {
+type CrossSafeMetrics interface {
+	RecordCrossSafeRef(ref eth.L2BlockRef)
+}
+
+func CrossSafeUpdate(logger log.Logger, chainID eth.ChainID, d CrossSafeDeps, m CrossSafeMetrics) error {
 	logger.Debug("Cross-safe update call")
 	// TODO(#11693): establish L1 reorg-lock of scopeDerivedFrom
 	// defer unlock once we are done checking the chain
@@ -63,6 +67,11 @@ func CrossSafeUpdate(logger log.Logger, chainID eth.ChainID, d CrossSafeDeps) er
 	if err := d.UpdateCrossSafe(chainID, newScope, crossSafeRef); err != nil {
 		return fmt.Errorf("failed to update cross-safe head with L1 scope increment to %s and repeat of L2 block %s: %w", candidateScope, crossSafeRef, err)
 	}
+	m.RecordCrossSafeRef(eth.L2BlockRef{
+		Number: crossSafeRef.Number,
+		Time:   crossSafeRef.Time,
+		Hash:   crossSafeRef.Hash,
+	})
 	return nil
 }
 
@@ -113,6 +122,7 @@ type CrossSafeWorker struct {
 	logger  log.Logger
 	chainID eth.ChainID
 	d       CrossSafeDeps
+	m       CrossSafeMetrics
 }
 
 func (c *CrossSafeWorker) OnEvent(ev event.Event) bool {
@@ -121,7 +131,7 @@ func (c *CrossSafeWorker) OnEvent(ev event.Event) bool {
 		if x.ChainID != c.chainID {
 			return false
 		}
-		if err := CrossSafeUpdate(c.logger, c.chainID, c.d); err != nil {
+		if err := CrossSafeUpdate(c.logger, c.chainID, c.d, c.m); err != nil {
 			if errors.Is(err, types.ErrFuture) {
 				c.logger.Debug("Worker awaits additional blocks", "err", err)
 			} else {
@@ -136,11 +146,12 @@ func (c *CrossSafeWorker) OnEvent(ev event.Event) bool {
 
 var _ event.Deriver = (*CrossUnsafeWorker)(nil)
 
-func NewCrossSafeWorker(logger log.Logger, chainID eth.ChainID, d CrossSafeDeps) *CrossSafeWorker {
+func NewCrossSafeWorker(logger log.Logger, chainID eth.ChainID, d CrossSafeDeps, m CrossSafeMetrics) *CrossSafeWorker {
 	logger = logger.New("chain", chainID)
 	return &CrossSafeWorker{
 		logger:  logger,
 		chainID: chainID,
 		d:       d,
+		m:       m,
 	}
 }
