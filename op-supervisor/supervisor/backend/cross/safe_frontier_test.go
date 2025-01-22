@@ -4,11 +4,12 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/stretchr/testify/require"
+
 	"github.com/ethereum-optimism/optimism/op-service/eth"
 	"github.com/ethereum-optimism/optimism/op-supervisor/supervisor/backend/depset"
 	"github.com/ethereum-optimism/optimism/op-supervisor/supervisor/types"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/stretchr/testify/require"
 )
 
 func TestHazardSafeFrontierChecks(t *testing.T) {
@@ -205,3 +206,8 @@ func (m mockDependencySet) Chains() []eth.ChainID {
 func (m mockDependencySet) HasChain(chain eth.ChainID) bool {
 	return true
 }
+
+type mockMetrics struct{}
+
+func (m mockMetrics) RecordCrossUnsafeRef(_ eth.L2BlockRef) {}
+func (m mockMetrics) RecordCrossSafeRef(_ eth.L2BlockRef)   {}

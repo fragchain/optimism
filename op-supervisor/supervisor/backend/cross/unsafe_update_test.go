@@ -4,16 +4,19 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/stretchr/testify/require"
+
 	"github.com/ethereum-optimism/optimism/op-service/eth"
 	"github.com/ethereum-optimism/optimism/op-service/testlog"
 	"github.com/ethereum-optimism/optimism/op-supervisor/supervisor/backend/depset"
 	"github.com/ethereum-optimism/optimism/op-supervisor/supervisor/types"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/stretchr/testify/require"
 )
 
 func TestCrossUnsafeUpdate(t *testing.T) {
+	metrics := mockMetrics{}
+
 	t.Run("CrossUnsafe returns error", func(t *testing.T) {
 		logger := testlog.Logger(t, log.LevelDebug)
 		chainID := eth.ChainIDFromUInt64(0)
@@ -24,7 +27,7 @@ func TestCrossUnsafeUpdate(t *testing.T) {
 		usd.deps = mockDependencySet{}
 		// when an error is returned by CrossUnsafe,
 		// the error is returned
-		err := CrossUnsafeUpdate(logger, chainID, usd)
+		err := CrossUnsafeUpdate(logger, chainID, usd, metrics)
 		require.ErrorContains(t, err, "some error")
 	})
 	t.Run("CrossUnsafe returns ErrFuture", func(t *testing.T) {
@@ -37,7 +40,7 @@ func TestCrossUnsafeUpdate(t *testing.T) {
 		usd.deps = mockDependencySet{}
 		// when a ErrFuture is returned by CrossUnsafe,
 		// no error is returned
-		err := CrossUnsafeUpdate(logger, chainID, usd)
+		err := CrossUnsafeUpdate(logger, chainID, usd, metrics)
 		require.NoError(t, err)
 	})
 	t.Run("OpenBlock returns error", func(t *testing.T) {
@@ -50,7 +53,7 @@ func TestCrossUnsafeUpdate(t *testing.T) {
 		usd.deps = mockDependencySet{}
 		// when an error is returned by OpenBlock,
 		// the error is returned
-		err := CrossUnsafeUpdate(logger, chainID, usd)
+		err := CrossUnsafeUpdate(logger, chainID, usd, metrics)
 		require.ErrorContains(t, err, "some error")
 	})
 	t.Run("opened block parent hash does not match", func(t *testing.T) {
@@ -68,7 +71,7 @@ func TestCrossUnsafeUpdate(t *testing.T) {
 		usd.deps = mockDependencySet{}
 		// when the parent hash of the opened block does not match the cross-unsafe block,
 		// an ErrConflict is returned
-		err := CrossUnsafeUpdate(logger, chainID, usd)
+		err := CrossUnsafeUpdate(logger, chainID, usd, metrics)
 		require.ErrorIs(t, err, types.ErrConflict)
 	})
 	t.Run("CrossSafeHazards returns error", func(t *testing.T) {
@@ -91,7 +94,7 @@ func TestCrossUnsafeUpdate(t *testing.T) {
 		}
 		// when CrossSafeHazards returns an error,
 		// the error is returned
-		err := CrossUnsafeUpdate(logger, chainID, usd)
+		err := CrossUnsafeUpdate(logger, chainID, usd, metrics)
 		require.ErrorContains(t, err, "some error")
 	})
 	t.Run("HazardUnsafeFrontierChecks returns error", func(t *testing.T) {
@@ -121,7 +124,7 @@ func TestCrossUnsafeUpdate(t *testing.T) {
 		}
 		// when HazardUnsafeFrontierChecks returns an error,
 		// the error is returned
-		err := CrossUnsafeUpdate(logger, chainID, usd)
+		err := CrossUnsafeUpdate(logger, chainID, usd, metrics)
 		require.ErrorContains(t, err, "some error")
 	})
 	t.Run("HazardCycleChecks returns error", func(t *testing.T) {
@@ -144,7 +147,7 @@ func TestCrossUnsafeUpdate(t *testing.T) {
 		usd.deps = mockDependencySet{}
 
 		// HazardCycleChecks returns an error with appropriate wrapping
-		err := CrossUnsafeUpdate(logger, chainID, usd)
+		err := CrossUnsafeUpdate(logger, chainID, usd, metrics)
 		require.ErrorContains(t, err, "cycle detected")
 		require.ErrorContains(t, err, "failed to verify block")
 	})
@@ -172,7 +175,7 @@ func TestCrossUnsafeUpdate(t *testing.T) {
 		}
 		// when there are no errors, the cross-unsafe block is updated
 		// the updated block is the block opened in OpenBlock
-		err := CrossUnsafeUpdate(logger, chainID, usd)
+		err := CrossUnsafeUpdate(logger, chainID, usd, metrics)
 		require.NoError(t, err)
 		require.Equal(t, chainID, updatingChainID)
 		require.Equal(t, types.BlockSealFromRef(bl), updatingBlock)

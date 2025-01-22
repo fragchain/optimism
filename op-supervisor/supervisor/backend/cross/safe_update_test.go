@@ -4,16 +4,19 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
+	"github.com/stretchr/testify/require"
+
 	"github.com/ethereum-optimism/optimism/op-service/eth"
 	"github.com/ethereum-optimism/optimism/op-service/testlog"
 	"github.com/ethereum-optimism/optimism/op-supervisor/supervisor/backend/depset"
 	"github.com/ethereum-optimism/optimism/op-supervisor/supervisor/types"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/stretchr/testify/require"
 )
 
 func TestCrossSafeUpdate(t *testing.T) {
+	metrics := mockMetrics{}
+
 	t.Run("scopedCrossSafeUpdate passes", func(t *testing.T) {
 		logger := testlog.Logger(t, log.LevelDebug)
 		chainID := eth.ChainIDFromUInt64(0)
@@ -34,7 +37,7 @@ func TestCrossSafeUpdate(t *testing.T) {
 		csd.deps = mockDependencySet{}
 		// when scopedCrossSafeUpdate returns no error,
 		// no error is returned
-		err := CrossSafeUpdate(logger, chainID, csd)
+		err := CrossSafeUpdate(logger, chainID, csd, metrics)
 		require.NoError(t, err)
 	})
 	t.Run("scopedCrossSafeUpdate returns error", func(t *testing.T) {
@@ -53,7 +56,7 @@ func TestCrossSafeUpdate(t *testing.T) {
 		// when scopedCrossSafeUpdate returns an error,
 		// (by way of OpenBlock returning an error),
 		// the error is returned
-		err := CrossSafeUpdate(logger, chainID, csd)
+		err := CrossSafeUpdate(logger, chainID, csd, metrics)
 		require.ErrorContains(t, err, "some error")
 	})
 	t.Run("scopedCrossSafeUpdate returns ErrOutOfScope", func(t *testing.T) {
@@ -94,7 +97,7 @@ func TestCrossSafeUpdate(t *testing.T) {
 		// CrossSafeUpdate proceeds anyway and calls UpdateCrossSafe
 		// the update uses the new scope returned by NextDerivedFrom
 		// and a crossSafeRef made from the current crossSafe and its parent
-		err := CrossSafeUpdate(logger, chainID, csd)
+		err := CrossSafeUpdate(logger, chainID, csd, metrics)
 		require.NoError(t, err)
 		require.Equal(t, chainID, updatingChain)
 		require.Equal(t, newScope, updatingCandidateScope)
@@ -120,7 +123,7 @@ func TestCrossSafeUpdate(t *testing.T) {
 		// when scopedCrossSafeUpdate returns Out of Scope error,
 		// and NextDerivedFrom returns an error,
 		// the error is returned
-		err := CrossSafeUpdate(logger, chainID, csd)
+		err := CrossSafeUpdate(logger, chainID, csd, metrics)
 		require.ErrorContains(t, err, "some error")
 	})
 	t.Run("PreviousDerived returns error", func(t *testing.T) {
@@ -142,7 +145,7 @@ func TestCrossSafeUpdate(t *testing.T) {
 		// when scopedCrossSafeUpdate returns Out of Scope error,
 		// and PreviousDerived returns an error,
 		// the error is returned
-		err := CrossSafeUpdate(logger, chainID, csd)
+		err := CrossSafeUpdate(logger, chainID, csd, metrics)
 		require.ErrorContains(t, err, "some error")
 	})
 	t.Run("UpdateCrossSafe returns error", func(t *testing.T) {
@@ -164,7 +167,7 @@ func TestCrossSafeUpdate(t *testing.T) {
 		// when scopedCrossSafeUpdate returns Out of Scope error,
 		// and UpdateCrossSafe returns an error,
 		// the error is returned
-		err := CrossSafeUpdate(logger, chainID, csd)
+		err := CrossSafeUpdate(logger, chainID, csd, metrics)
 		require.ErrorContains(t, err, "some error")
 	})
 }
