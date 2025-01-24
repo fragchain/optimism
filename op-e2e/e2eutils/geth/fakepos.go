@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
@@ -105,6 +106,7 @@ func (f *fakePoS) Start() error {
 				}
 				parentBeaconBlockRoot := f.FakeBeaconBlockRoot(head.Time) // parent beacon block root
 				isCancun := f.eth.BlockChain().Config().IsCancun(new(big.Int).SetUint64(head.Number.Uint64()+1), newBlockTime)
+				isIsthmus := f.eth.BlockChain().Config().IsIsthmus(newBlockTime)
 				if isCancun {
 					attrs.BeaconRoot = &parentBeaconBlockRoot
 				}
@@ -164,7 +166,9 @@ func (f *fakePoS) Start() error {
 					}
 				}
 
-				if isCancun {
+				if isIsthmus {
+					_, err = f.engineAPI.NewPayloadV4(*envelope.ExecutionPayload, blobHashes, &parentBeaconBlockRoot, []hexutil.Bytes{})
+				} else if isCancun {
 					_, err = f.engineAPI.NewPayloadV3(*envelope.ExecutionPayload, blobHashes, &parentBeaconBlockRoot)
 				} else {
 					_, err = f.engineAPI.NewPayloadV2(*envelope.ExecutionPayload)
