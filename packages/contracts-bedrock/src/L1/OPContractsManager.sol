@@ -175,7 +175,7 @@ contract OPContractsManager is ISemver {
     bool public isRC = true;
 
     /// @notice Returns the release string. Appends "-rc" if this is a release candidate.
-    function l1ContractsRelease() external view returns (string memory) {
+    function l1ContractsRelease() external virtual view returns (string memory) {
         return isRC ? string.concat(L1_CONTRACTS_RELEASE, "-rc") : L1_CONTRACTS_RELEASE;
     }
 
@@ -240,8 +240,8 @@ contract OPContractsManager is ISemver {
         Implementations memory _implementations,
         address _upgradeController
     ) {
-        assertValidContractAddress(address(_superchainConfig));
-        assertValidContractAddress(address(_protocolVersions));
+        // assertValidContractAddress(address(_superchainConfig));
+        // assertValidContractAddress(address(_protocolVersions));
         superchainConfig = _superchainConfig;
         protocolVersions = _protocolVersions;
         L1_CONTRACTS_RELEASE = _l1ContractsRelease;
@@ -252,7 +252,7 @@ contract OPContractsManager is ISemver {
         upgradeController = _upgradeController;
     }
 
-    function deploy(DeployInput calldata _input) external returns (DeployOutput memory) {
+    function deploy(DeployInput calldata _input) external virtual returns (DeployOutput memory) {
         assertValidInputs(_input);
         uint256 l2ChainId = _input.l2ChainId;
         string memory saltMixer = _input.saltMixer;
@@ -432,7 +432,7 @@ contract OPContractsManager is ISemver {
     /// @notice Upgrades a set of chains to the latest implementation contracts
     /// @param _opChains Array of OpChain structs, one per chain to upgrade
     /// @dev This function is intended to be called via DELEGATECALL from the Upgrade Controller Safe
-    function upgrade(OpChain[] memory _opChains) external {
+    function upgrade(OpChain[] memory _opChains) external virtual {
         if (address(this) == address(thisOPCM)) revert OnlyDelegatecall();
 
         // If this is delegatecalled by the upgrade controller, set isRC to false first, else, continue execution.
@@ -568,7 +568,7 @@ contract OPContractsManager is ISemver {
 
     /// @notice addGameType deploys a new dispute game and links it to the DisputeGameFactory. The inputted _gameConfigs
     /// must be added in ascending GameType order.
-    function addGameType(AddGameInput[] memory _gameConfigs) public returns (AddGameOutput[] memory) {
+    function addGameType(AddGameInput[] memory _gameConfigs) public virtual returns (AddGameOutput[] memory) {
         if (address(this) == address(thisOPCM)) revert OnlyDelegatecall();
         if (_gameConfigs.length == 0) revert InvalidGameConfigs();
 
@@ -677,51 +677,6 @@ contract OPContractsManager is ISemver {
 
         return outputs;
     }
-
-    /// @notice Updates the prestate hash for a new game type while keeping all other parameters the same
-    /// @param _prestateHash The new prestate hash to use
-    function updatePrestate(Claim[] memory _prestateHash, OpChain[] memory _opChain) external {
-        if (_prestateHash.length != _opChain.length) revert InvalidInputLength();
-
-        AddGameInput[] memory inputs = new AddGameInput[](_opChain.length);
-
-        // Loop through each chain and prestate hash
-        for (uint256 i = 0; i < _opChain.length; i++) {
-            // Get the current game implementation to copy parameters from
-            IPermissionedDisputeGame pdg = IPermissionedDisputeGame(
-                address(
-                    getGameImplementation(
-                        IDisputeGameFactory(_opChain[i].systemConfigProxy.disputeGameFactory()),
-                        GameTypes.PERMISSIONED_CANNON
-                    )
-                )
-            );
-
-            // Get the existing game parameters
-            IFaultDisputeGame.GameConstructorParams memory params = getGameConstructorParams(IFaultDisputeGame(address(pdg)));
-
-            // Create game input with updated prestate but same other params
-            inputs[i] = AddGameInput({
-                saltMixer: "prestate_update",
-                systemConfig: _opChain[i].systemConfigProxy,
-                proxyAdmin: _opChain[i].proxyAdmin,
-                delayedWETH: IDelayedWETH(payable(address(params.weth))),
-                disputeGameType: params.gameType,
-                disputeAbsolutePrestate: _prestateHash[i],
-                disputeMaxGameDepth: params.maxGameDepth,
-                disputeSplitDepth: params.splitDepth,
-                disputeClockExtension: params.clockExtension,
-                disputeMaxClockDuration: params.maxClockDuration,
-                initialBond: 0, // Set to 0 since we're just updating prestate
-                vm: params.vm,
-                permissioned: true
-            });
-        }
-
-            // Add the new game type with updated prestate
-            addGameType(inputs);
-    }
-
 
     // -------- Utilities --------
 
@@ -1083,3 +1038,5 @@ contract OPContractsManager is ISemver {
         IDisputeGameFactory(_opChainAddrs.disputeGameFactory).setImplementation(_gameType, IDisputeGame(newGame));
     }
 }
+
+
