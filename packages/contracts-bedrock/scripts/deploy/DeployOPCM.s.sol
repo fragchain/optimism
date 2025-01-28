@@ -50,29 +50,53 @@ contract DeployOPCMInput is BaseDeployIO {
     function set(bytes4 _sel, address _addr) public {
         require(_addr != address(0), "DeployOPCMInput: cannot set zero address");
 
-        if (_sel == this.superchainConfig.selector) _superchainConfig = ISuperchainConfig(_addr);
-        else if (_sel == this.protocolVersions.selector) _protocolVersions = IProtocolVersions(_addr);
-        else if (_sel == this.upgradeController.selector) _upgradeController = _addr;
-        else if (_sel == this.addressManagerBlueprint.selector) _addressManagerBlueprint = _addr;
-        else if (_sel == this.proxyBlueprint.selector) _proxyBlueprint = _addr;
-        else if (_sel == this.proxyAdminBlueprint.selector) _proxyAdminBlueprint = _addr;
-        else if (_sel == this.l1ChugSplashProxyBlueprint.selector) _l1ChugSplashProxyBlueprint = _addr;
-        else if (_sel == this.resolvedDelegateProxyBlueprint.selector) _resolvedDelegateProxyBlueprint = _addr;
-        else if (_sel == this.permissionedDisputeGame1Blueprint.selector) _permissionedDisputeGame1Blueprint = _addr;
-        else if (_sel == this.permissionedDisputeGame2Blueprint.selector) _permissionedDisputeGame2Blueprint = _addr;
-        else if (_sel == this.permissionlessDisputeGame1Blueprint.selector) _permissionlessDisputeGame1Blueprint = _addr;
-        else if (_sel == this.permissionlessDisputeGame2Blueprint.selector) _permissionlessDisputeGame2Blueprint = _addr;
-        else if (_sel == this.l1ERC721BridgeImpl.selector) _l1ERC721BridgeImpl = _addr;
-        else if (_sel == this.optimismPortalImpl.selector) _optimismPortalImpl = _addr;
-        else if (_sel == this.systemConfigImpl.selector) _systemConfigImpl = _addr;
-        else if (_sel == this.optimismMintableERC20FactoryImpl.selector) _optimismMintableERC20FactoryImpl = _addr;
-        else if (_sel == this.l1CrossDomainMessengerImpl.selector) _l1CrossDomainMessengerImpl = _addr;
-        else if (_sel == this.l1StandardBridgeImpl.selector) _l1StandardBridgeImpl = _addr;
-        else if (_sel == this.disputeGameFactoryImpl.selector) _disputeGameFactoryImpl = _addr;
-        else if (_sel == this.anchorStateRegistryImpl.selector) _anchorStateRegistryImpl = _addr;
-        else if (_sel == this.delayedWETHImpl.selector) _delayedWETHImpl = _addr;
-        else if (_sel == this.mipsImpl.selector) _mipsImpl = _addr;
-        else revert("DeployOPCMInput: unknown selector");
+        if (_sel == this.superchainConfig.selector) {
+            _superchainConfig = ISuperchainConfig(_addr);
+        } else if (_sel == this.protocolVersions.selector) {
+            _protocolVersions = IProtocolVersions(_addr);
+        } else if (_sel == this.upgradeController.selector) {
+            _upgradeController = _addr;
+        } else if (_sel == this.addressManagerBlueprint.selector) {
+            _addressManagerBlueprint = _addr;
+        } else if (_sel == this.proxyBlueprint.selector) {
+            _proxyBlueprint = _addr;
+        } else if (_sel == this.proxyAdminBlueprint.selector) {
+            _proxyAdminBlueprint = _addr;
+        } else if (_sel == this.l1ChugSplashProxyBlueprint.selector) {
+            _l1ChugSplashProxyBlueprint = _addr;
+        } else if (_sel == this.resolvedDelegateProxyBlueprint.selector) {
+            _resolvedDelegateProxyBlueprint = _addr;
+        } else if (_sel == this.permissionedDisputeGame1Blueprint.selector) {
+            _permissionedDisputeGame1Blueprint = _addr;
+        } else if (_sel == this.permissionedDisputeGame2Blueprint.selector) {
+            _permissionedDisputeGame2Blueprint = _addr;
+        } else if (_sel == this.permissionlessDisputeGame1Blueprint.selector) {
+            _permissionlessDisputeGame1Blueprint = _addr;
+        } else if (_sel == this.permissionlessDisputeGame2Blueprint.selector) {
+            _permissionlessDisputeGame2Blueprint = _addr;
+        } else if (_sel == this.l1ERC721BridgeImpl.selector) {
+            _l1ERC721BridgeImpl = _addr;
+        } else if (_sel == this.optimismPortalImpl.selector) {
+            _optimismPortalImpl = _addr;
+        } else if (_sel == this.systemConfigImpl.selector) {
+            _systemConfigImpl = _addr;
+        } else if (_sel == this.optimismMintableERC20FactoryImpl.selector) {
+            _optimismMintableERC20FactoryImpl = _addr;
+        } else if (_sel == this.l1CrossDomainMessengerImpl.selector) {
+            _l1CrossDomainMessengerImpl = _addr;
+        } else if (_sel == this.l1StandardBridgeImpl.selector) {
+            _l1StandardBridgeImpl = _addr;
+        } else if (_sel == this.disputeGameFactoryImpl.selector) {
+            _disputeGameFactoryImpl = _addr;
+        } else if (_sel == this.anchorStateRegistryImpl.selector) {
+            _anchorStateRegistryImpl = _addr;
+        } else if (_sel == this.delayedWETHImpl.selector) {
+            _delayedWETHImpl = _addr;
+        } else if (_sel == this.mipsImpl.selector) {
+            _mipsImpl = _addr;
+        } else {
+            revert("DeployOPCMInput: unknown selector");
+        }
     }
 
     // Setter for string type
@@ -242,7 +266,6 @@ contract DeployOPCM is Script {
             mipsImpl: address(_doi.mipsImpl())
         });
 
-
         OPPrestateUpdater opcm_ = deployOPCM(
             _doi.superchainConfig(),
             _doi.protocolVersions(),
@@ -334,7 +357,6 @@ contract DeployOPCM is Script {
     }
 }
 
-
 // Create a self contained script for deploying an OPPrestateUpdater with mostly dummy args as
 //
 contract DeployOPCMRunner is Script {
@@ -352,7 +374,6 @@ contract DeployOPCMRunner is Script {
     }
 
     function run() public {
-
         doi.set(doi.superchainConfig.selector, address(superchainConfigProxy));
         doi.set(doi.protocolVersions.selector, address(protocolVersionsProxy));
         doi.set(doi.l1ContractsRelease.selector, "1.0.0");
@@ -367,8 +388,11 @@ contract DeployOPCMRunner is Script {
 
         // These are the only blueprints we actually need:
         vm.startBroadcast(vm.envAddress("DEPLOYER"));
-        (address permissionedDisputeGame1, address permissionedDisputeGame2) = DeployUtils.createDeterministicBlueprint(vm.getCode("PermissionedDisputeGame"), bytes32(bytes(vm.envString("SALT"))));
-        (address permissionlessDisputeGame1, address permissionlessDisputeGame2) = DeployUtils.createDeterministicBlueprint(vm.getCode("FaultDisputeGame"), bytes32(bytes(vm.envString("SALT"))));
+        (address permissionedDisputeGame1, address permissionedDisputeGame2) = DeployUtils.createDeterministicBlueprint(
+            vm.getCode("PermissionedDisputeGame"), bytes32(bytes(vm.envString("SALT")))
+        );
+        (address permissionlessDisputeGame1, address permissionlessDisputeGame2) = DeployUtils
+            .createDeterministicBlueprint(vm.getCode("FaultDisputeGame"), bytes32(bytes(vm.envString("SALT"))));
         vm.stopBroadcast();
 
         doi.set(doi.permissionedDisputeGame1Blueprint.selector, permissionedDisputeGame1);
