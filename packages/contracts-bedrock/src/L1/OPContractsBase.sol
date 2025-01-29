@@ -208,6 +208,134 @@ abstract contract OPContractsBase is ISemver {
     /// @notice Thrown when the input arrays are of different lengths.
     error InvalidInputLength();
 
+    /// @notice Deterministically deploys a new proxy contract owned by the provided ProxyAdmin.
+    /// The salt is computed as a function of the L2 chain ID, the salt mixer and the contract name.
+    /// This is required because we deploy many identical proxies, so they each require a unique salt for determinism.
+    function deployProxy(
+        uint256 _l2ChainId,
+        IProxyAdmin _proxyAdmin,
+        string memory _saltMixer,
+        string memory _contractName
+    )
+        internal
+        returns (address)
+    {
+        bytes32 salt = computeSalt(_l2ChainId, _saltMixer, _contractName);
+        return Blueprint.deployFrom(blueprints().proxy, salt, abi.encode(_proxyAdmin));
+    }
+
+    /// @notice addGameType deploys a new dispute game and links it to the DisputeGameFactory. The inputted _gameConfigs
+    /// must be added in ascending GameType order.
+    function addGameType(AddGameInput[] memory _gameConfigs) public virtual returns (AddGameOutput[] memory) {
+        //if (address(this) == address(thisOPCM)) revert OnlyDelegatecall();
+        if (_gameConfigs.length == 0) revert InvalidGameConfigs();
+
+        AddGameOutput[] memory outputs = new AddGameOutput[](_gameConfigs.length);
+        Blueprints memory bps = blueprints();
+
+        // Store last game config as an int256 so that we can ensure that the same game config is not added twice.
+        // Using int256 generates cheaper, simpler bytecode.
+        int256 lastGameConfig = -1;
+
+        for (uint256 i = 0; i < _gameConfigs.length; i++) {
+            AddGameInput memory gameConfig = _gameConfigs[i];
+
+            // This conversion is safe because the GameType is a uint32, which will always fit in an int256.
+            int256 gameTypeInt = int256(uint256(gameConfig.disputeGameType.raw()));
+            // Ensure that the game configs are added in ascending order, and not duplicated.
+            if (lastGameConfig >= gameTypeInt) revert InvalidGameConfigs();
+            lastGameConfig = gameTypeInt;
+
+            // Grab the FDG from the SystemConfig.
+            IFaultDisputeGame fdg = IFaultDisputeGame(
+                address(
+                    getGameImplementation(
+                        IDisputeGameFactory(gameConfig.systemConfig.disputeGameFactory()), GameTypes.PERMISSIONED_CANNON
+                    )
+                )
+            );
+            // Pull out the chain ID.
+            uint256 l2ChainId = fdg.l2ChainId();
+
+            // Deploy a new DelayedWETH proxy for this game if one hasn't already been specified. Leaving
+            /// gameConfig.delayedWETH as the zero address will cause a new DelayedWETH to be deployed for this game.
+            if (address(gameConfig.delayedWETH) == address(0)) {
+                outputs[i].delayedWETH = IDelayedWETH(
+                    payable(deployProxy(l2ChainId, gameConfig.proxyAdmin, gameConfig.saltMixer, "DelayedWETH"))
+                );
+
+                // Initialize the proxy.
+                upgradeToAndCall(
+                    gameConfig.proxyAdmin,
+                    address(outputs[i].delayedWETH),
+                    implementations().delayedWETHImpl,
+                    abi.encodeCall(IDelayedWETH.initialize, (gameConfig.proxyAdmin.owner(), superchainConfig))
+                );
+            } else {
+                outputs[i].delayedWETH = gameConfig.delayedWETH;
+            }
+
+            // The below sections are functionally the same. Both deploy a new dispute game. The dispute game type is
+            // either permissioned or permissionless depending on game config.
+            if (gameConfig.permissioned) {
+                IPermissionedDisputeGame pdg = IPermissionedDisputeGame(address(fdg));
+                outputs[i].faultDisputeGame = IFaultDisputeGame(
+                    Blueprint.deployFrom(
+                        bps.permissionedDisputeGame1,
+                        bps.permissionedDisputeGame2,
+                        computeSalt(l2ChainId, gameConfig.saltMixer, "PermissionedDisputeGame"),
+                        encodePermissionedFDGConstructor(
+                            IFaultDisputeGame.GameConstructorParams(
+                                gameConfig.disputeGameType,
+                                gameConfig.disputeAbsolutePrestate,
+                                gameConfig.disputeMaxGameDepth,
+                                gameConfig.disputeSplitDepth,
+                                gameConfig.disputeClockExtension,
+                                gameConfig.disputeMaxClockDuration,
+                                gameConfig.vm,
+                                outputs[i].delayedWETH,
+                                pdg.anchorStateRegistry(),
+                                l2ChainId
+                            ),
+                            pdg.proposer(),
+                            pdg.challenger()
+                        )
+                    )
+                );
+            } else {
+                outputs[i].faultDisputeGame = IFaultDisputeGame(
+                    Blueprint.deployFrom(
+                        bps.permissionlessDisputeGame1,
+                        bps.permissionlessDisputeGame2,
+                        computeSalt(l2ChainId, gameConfig.saltMixer, "PermissionlessDisputeGame"),
+                        encodePermissionlessFDGConstructor(
+                            IFaultDisputeGame.GameConstructorParams(
+                                gameConfig.disputeGameType,
+                                gameConfig.disputeAbsolutePrestate,
+                                gameConfig.disputeMaxGameDepth,
+                                gameConfig.disputeSplitDepth,
+                                gameConfig.disputeClockExtension,
+                                gameConfig.disputeMaxClockDuration,
+                                gameConfig.vm,
+                                outputs[i].delayedWETH,
+                                fdg.anchorStateRegistry(),
+                                l2ChainId
+                            )
+                        )
+                    )
+                );
+            }
+
+            // As a last step, register the new game type with the DisputeGameFactory. If the game type already exists,
+            // then its implementation will be overwritten.
+            IDisputeGameFactory dgf = IDisputeGameFactory(gameConfig.systemConfig.disputeGameFactory());
+            dgf.setImplementation(gameConfig.disputeGameType, IDisputeGame(address(outputs[i].faultDisputeGame)));
+            dgf.setInitBond(gameConfig.disputeGameType, gameConfig.initialBond);
+        }
+
+        return outputs;
+    }
+
     /// @notice Verifies that all inputs are valid and reverts if any are invalid.
     /// Typically the proxy admin owner is expected to have code, but this is not enforced here.
     function assertValidInputs(DeployInput calldata _input) internal view {
@@ -475,7 +603,7 @@ abstract contract OPContractsBase is ISemver {
     }
 
     /// @notice Sets the RC flag.
-    function setRC(bool _isRC) external {
+    function setRC(bool _isRC) public {
         if (msg.sender != upgradeController) revert OnlyUpgradeController();
         isRC = _isRC;
     }

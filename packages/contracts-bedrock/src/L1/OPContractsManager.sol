@@ -32,153 +32,11 @@ import { IL1StandardBridge } from "interfaces/L1/IL1StandardBridge.sol";
 import { IOptimismMintableERC20Factory } from "interfaces/universal/IOptimismMintableERC20Factory.sol";
 
 contract OPContractsManager is OPContractsBase {
-    // -------- Structs --------
-
-    /// @notice Represents the roles that can be set when deploying a standard OP Stack chain.
-    struct Roles {
-        address opChainProxyAdminOwner;
-        address systemConfigOwner;
-        address batcher;
-        address unsafeBlockSigner;
-        address proposer;
-        address challenger;
-    }
-
-    /// @notice The full set of inputs to deploy a new OP Stack chain.
-    struct DeployInput {
-        Roles roles;
-        uint32 basefeeScalar;
-        uint32 blobBasefeeScalar;
-        uint256 l2ChainId;
-        // The correct type is OutputRoot memory but OP Deployer does not yet support structs.
-        bytes startingAnchorRoot;
-        // The salt mixer is used as part of making the resulting salt unique.
-        string saltMixer;
-        uint64 gasLimit;
-        // Configurable dispute game parameters.
-        GameType disputeGameType;
-        Claim disputeAbsolutePrestate;
-        uint256 disputeMaxGameDepth;
-        uint256 disputeSplitDepth;
-        Duration disputeClockExtension;
-        Duration disputeMaxClockDuration;
-    }
-
-    /// @notice The full set of outputs from deploying a new OP Stack chain.
-    struct DeployOutput {
-        IProxyAdmin opChainProxyAdmin;
-        IAddressManager addressManager;
-        IL1ERC721Bridge l1ERC721BridgeProxy;
-        ISystemConfig systemConfigProxy;
-        IOptimismMintableERC20Factory optimismMintableERC20FactoryProxy;
-        IL1StandardBridge l1StandardBridgeProxy;
-        IL1CrossDomainMessenger l1CrossDomainMessengerProxy;
-        // Fault proof contracts below.
-        IOptimismPortal2 optimismPortalProxy;
-        IDisputeGameFactory disputeGameFactoryProxy;
-        IAnchorStateRegistry anchorStateRegistryProxy;
-        IFaultDisputeGame faultDisputeGame;
-        IPermissionedDisputeGame permissionedDisputeGame;
-        IDelayedWETH delayedWETHPermissionedGameProxy;
-        IDelayedWETH delayedWETHPermissionlessGameProxy;
-    }
-
-    /// @notice Addresses of ERC-5202 Blueprint contracts. There are used for deploying full size
-    /// contracts, to reduce the code size of this factory contract. If it deployed full contracts
-    /// using the `new Proxy()` syntax, the code size would get large fast, since this contract would
-    /// contain the bytecode of every contract it deploys. Therefore we instead use Blueprints to
-    /// reduce the code size of this contract.
-    struct Blueprints {
-        address addressManager;
-        address proxy;
-        address proxyAdmin;
-        address l1ChugSplashProxy;
-        address resolvedDelegateProxy;
-        address permissionedDisputeGame1;
-        address permissionedDisputeGame2;
-        address permissionlessDisputeGame1;
-        address permissionlessDisputeGame2;
-    }
-
-    /// @notice The latest implementation contracts for the OP Stack.
-    struct Implementations {
-        address l1ERC721BridgeImpl;
-        address optimismPortalImpl;
-        address systemConfigImpl;
-        address optimismMintableERC20FactoryImpl;
-        address l1CrossDomainMessengerImpl;
-        address l1StandardBridgeImpl;
-        address disputeGameFactoryImpl;
-        address anchorStateRegistryImpl;
-        address delayedWETHImpl;
-        address mipsImpl;
-    }
-
-    /// @notice The input required to identify a chain for upgrading.
-    struct OpChain {
-        ISystemConfig systemConfigProxy;
-        IProxyAdmin proxyAdmin;
-    }
-
-    struct AddGameInput {
-        string saltMixer;
-        ISystemConfig systemConfig;
-        IProxyAdmin proxyAdmin;
-        IDelayedWETH delayedWETH;
-        GameType disputeGameType;
-        Claim disputeAbsolutePrestate;
-        uint256 disputeMaxGameDepth;
-        uint256 disputeSplitDepth;
-        Duration disputeClockExtension;
-        Duration disputeMaxClockDuration;
-        uint256 initialBond;
-        IBigStepper vm;
-        bool permissioned;
-    }
-
-    struct AddGameOutput {
-        IDelayedWETH delayedWETH;
-        IFaultDisputeGame faultDisputeGame;
-    }
-
     // -------- Constants and Variables --------
 
     /// @custom:semver 1.0.0-beta.35
     function version() public pure virtual returns (string memory) {
         return "1.0.0-beta.35";
-    }
-
-    /// @notice Address of the SuperchainConfig contract shared by all chains.
-    ISuperchainConfig public immutable superchainConfig;
-
-    /// @notice Address of the ProtocolVersions contract shared by all chains.
-    IProtocolVersions public immutable protocolVersions;
-
-    /// @notice L1 smart contracts release deployed by this version of OPCM. This is used in opcm to signal which
-    /// version of the L1 smart contracts is deployed. It takes the format of `op-contracts/vX.Y.Z`.
-    string internal L1_CONTRACTS_RELEASE;
-
-    /// @notice Addresses of the Blueprint contracts.
-    /// This is internal because if public the autogenerated getter method would return a tuple of
-    /// addresses, but we want it to return a struct.
-    Blueprints internal blueprint;
-
-    /// @notice Addresses of the latest implementation contracts.
-    Implementations internal implementation;
-
-    /// @notice The OPContractsManager contract that is currently being used. This is needed in the upgrade function
-    /// which is intended to be DELEGATECALLed.
-    //OPContractsManager internal immutable thisOPCM;
-
-    /// @notice The address of the upgrade controller.
-    address public immutable upgradeController;
-
-    /// @notice Whether this is a release candidate.
-    bool public isRC = true;
-
-    /// @notice Returns the release string. Appends "-rc" if this is a release candidate.
-    function l1ContractsRelease() external view virtual returns (string memory) {
-        return isRC ? string.concat(L1_CONTRACTS_RELEASE, "-rc") : L1_CONTRACTS_RELEASE;
     }
 
     constructor(
@@ -189,15 +47,14 @@ contract OPContractsManager is OPContractsBase {
         Implementations memory _implementations,
         address _upgradeController
     ) {
-        // assertValidContractAddress(address(_superchainConfig));
-        // assertValidContractAddress(address(_protocolVersions));
+        assertValidContractAddress(address(_superchainConfig));
+        assertValidContractAddress(address(_protocolVersions));
         superchainConfig = _superchainConfig;
         protocolVersions = _protocolVersions;
         L1_CONTRACTS_RELEASE = _l1ContractsRelease;
 
         blueprint = _blueprints;
         implementation = _implementations;
-        thisOPCM = this;
         upgradeController = _upgradeController;
     }
 
@@ -397,17 +254,17 @@ contract OPContractsManager is OPContractsBase {
     /// @param _opChains Array of OpChain structs, one per chain to upgrade
     /// @dev This function is intended to be called via DELEGATECALL from the Upgrade Controller Safe
     function upgrade(OpChain[] memory _opChains) external virtual {
-        if (address(this) == address(thisOPCM)) revert OnlyDelegatecall();
+        //if (address(this) == address(thisOPCM)) revert OnlyDelegatecall();
 
         // If this is delegatecalled by the upgrade controller, set isRC to false first, else, continue execution.
         if (address(this) == upgradeController) {
             // Set isRC to false.
             // This function asserts that the caller is the upgrade controller.
-            thisOPCM.setRC(false);
+            super.setRC(false);
         }
 
-        Implementations memory impls = thisOPCM.implementations();
-        Blueprints memory bps = thisOPCM.blueprints();
+        Implementations memory impls = super.implementations();
+        Blueprints memory bps = super.blueprints();
         // TODO: upgrading the SuperchainConfig and ProtocolVersions (in a new function)
 
         for (uint256 i = 0; i < _opChains.length; i++) {
@@ -528,133 +385,5 @@ contract OPContractsManager is OPContractsBase {
             // the caller will be the value of the ADDRESS opcode.
             emit Upgraded(l2ChainId, _opChains[i].systemConfigProxy, address(this));
         }
-    }
-
-    /// @notice Deterministically deploys a new proxy contract owned by the provided ProxyAdmin.
-    /// The salt is computed as a function of the L2 chain ID, the salt mixer and the contract name.
-    /// This is required because we deploy many identical proxies, so they each require a unique salt for determinism.
-    function deployProxy(
-        uint256 _l2ChainId,
-        IProxyAdmin _proxyAdmin,
-        string memory _saltMixer,
-        string memory _contractName
-    )
-        internal
-        returns (address)
-    {
-        bytes32 salt = computeSalt(_l2ChainId, _saltMixer, _contractName);
-        return Blueprint.deployFrom(thisOPCM.blueprints().proxy, salt, abi.encode(_proxyAdmin));
-    }
-
-    /// @notice addGameType deploys a new dispute game and links it to the DisputeGameFactory. The inputted _gameConfigs
-    /// must be added in ascending GameType order.
-    function addGameType(AddGameInput[] memory _gameConfigs) public virtual returns (AddGameOutput[] memory) {
-        if (address(this) == address(thisOPCM)) revert OnlyDelegatecall();
-        if (_gameConfigs.length == 0) revert InvalidGameConfigs();
-
-        AddGameOutput[] memory outputs = new AddGameOutput[](_gameConfigs.length);
-        Blueprints memory bps = thisOPCM.blueprints();
-
-        // Store last game config as an int256 so that we can ensure that the same game config is not added twice.
-        // Using int256 generates cheaper, simpler bytecode.
-        int256 lastGameConfig = -1;
-
-        for (uint256 i = 0; i < _gameConfigs.length; i++) {
-            AddGameInput memory gameConfig = _gameConfigs[i];
-
-            // This conversion is safe because the GameType is a uint32, which will always fit in an int256.
-            int256 gameTypeInt = int256(uint256(gameConfig.disputeGameType.raw()));
-            // Ensure that the game configs are added in ascending order, and not duplicated.
-            if (lastGameConfig >= gameTypeInt) revert InvalidGameConfigs();
-            lastGameConfig = gameTypeInt;
-
-            // Grab the FDG from the SystemConfig.
-            IFaultDisputeGame fdg = IFaultDisputeGame(
-                address(
-                    getGameImplementation(
-                        IDisputeGameFactory(gameConfig.systemConfig.disputeGameFactory()), GameTypes.PERMISSIONED_CANNON
-                    )
-                )
-            );
-            // Pull out the chain ID.
-            uint256 l2ChainId = fdg.l2ChainId();
-
-            // Deploy a new DelayedWETH proxy for this game if one hasn't already been specified. Leaving
-            /// gameConfig.delayedWETH as the zero address will cause a new DelayedWETH to be deployed for this game.
-            if (address(gameConfig.delayedWETH) == address(0)) {
-                outputs[i].delayedWETH = IDelayedWETH(
-                    payable(deployProxy(l2ChainId, gameConfig.proxyAdmin, gameConfig.saltMixer, "DelayedWETH"))
-                );
-
-                // Initialize the proxy.
-                upgradeToAndCall(
-                    gameConfig.proxyAdmin,
-                    address(outputs[i].delayedWETH),
-                    thisOPCM.implementations().delayedWETHImpl,
-                    abi.encodeCall(IDelayedWETH.initialize, (gameConfig.proxyAdmin.owner(), superchainConfig))
-                );
-            } else {
-                outputs[i].delayedWETH = gameConfig.delayedWETH;
-            }
-
-            // The below sections are functionally the same. Both deploy a new dispute game. The dispute game type is
-            // either permissioned or permissionless depending on game config.
-            if (gameConfig.permissioned) {
-                IPermissionedDisputeGame pdg = IPermissionedDisputeGame(address(fdg));
-                outputs[i].faultDisputeGame = IFaultDisputeGame(
-                    Blueprint.deployFrom(
-                        bps.permissionedDisputeGame1,
-                        bps.permissionedDisputeGame2,
-                        computeSalt(l2ChainId, gameConfig.saltMixer, "PermissionedDisputeGame"),
-                        encodePermissionedFDGConstructor(
-                            IFaultDisputeGame.GameConstructorParams(
-                                gameConfig.disputeGameType,
-                                gameConfig.disputeAbsolutePrestate,
-                                gameConfig.disputeMaxGameDepth,
-                                gameConfig.disputeSplitDepth,
-                                gameConfig.disputeClockExtension,
-                                gameConfig.disputeMaxClockDuration,
-                                gameConfig.vm,
-                                outputs[i].delayedWETH,
-                                pdg.anchorStateRegistry(),
-                                l2ChainId
-                            ),
-                            pdg.proposer(),
-                            pdg.challenger()
-                        )
-                    )
-                );
-            } else {
-                outputs[i].faultDisputeGame = IFaultDisputeGame(
-                    Blueprint.deployFrom(
-                        bps.permissionlessDisputeGame1,
-                        bps.permissionlessDisputeGame2,
-                        computeSalt(l2ChainId, gameConfig.saltMixer, "PermissionlessDisputeGame"),
-                        encodePermissionlessFDGConstructor(
-                            IFaultDisputeGame.GameConstructorParams(
-                                gameConfig.disputeGameType,
-                                gameConfig.disputeAbsolutePrestate,
-                                gameConfig.disputeMaxGameDepth,
-                                gameConfig.disputeSplitDepth,
-                                gameConfig.disputeClockExtension,
-                                gameConfig.disputeMaxClockDuration,
-                                gameConfig.vm,
-                                outputs[i].delayedWETH,
-                                fdg.anchorStateRegistry(),
-                                l2ChainId
-                            )
-                        )
-                    )
-                );
-            }
-
-            // As a last step, register the new game type with the DisputeGameFactory. If the game type already exists,
-            // then its implementation will be overwritten.
-            IDisputeGameFactory dgf = IDisputeGameFactory(gameConfig.systemConfig.disputeGameFactory());
-            dgf.setImplementation(gameConfig.disputeGameType, IDisputeGame(address(outputs[i].faultDisputeGame)));
-            dgf.setInitBond(gameConfig.disputeGameType, gameConfig.initialBond);
-        }
-
-        return outputs;
     }
 }
