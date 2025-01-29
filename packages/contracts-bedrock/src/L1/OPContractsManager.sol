@@ -262,7 +262,7 @@ contract OPContractsManager is OPContractsBase {
     /// @param _opChains Array of OpChain structs, one per chain to upgrade
     /// @dev This function is intended to be called via DELEGATECALL from the Upgrade Controller Safe
     function upgrade(OpChain[] memory _opChains) external virtual {
-        //if (address(this) == address(thisOPCM)) revert OnlyDelegatecall();
+        if (address(this) == opcmAddress) revert OnlyDelegatecall();
 
         // If this is delegatecalled by the upgrade controller, set isRC to false first, else, continue execution.
         if (address(this) == upgradeController) {
