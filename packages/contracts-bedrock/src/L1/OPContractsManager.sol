@@ -39,6 +39,15 @@ contract OPContractsManager is OPContractsBase {
         return "1.0.0-beta.35";
     }
 
+    /*
+    * @notice Constructs the CustomOPContractsManager contract
+    * @param _superchainConfig Address of the SuperchainConfig contract
+    * @param _protocolVersions Address of the ProtocolVersions contract
+    * @param _l1ContractsRelease Version string for L1 contracts release
+    * @param _blueprints Addresses of Blueprint contracts
+    * @param _implementations Addresses of implementation contracts
+    * @param _upgradeController Address of the upgrade controller
+    */
     constructor(
         ISuperchainConfig _superchainConfig,
         IProtocolVersions _protocolVersions,
@@ -46,17 +55,16 @@ contract OPContractsManager is OPContractsBase {
         Blueprints memory _blueprints,
         Implementations memory _implementations,
         address _upgradeController
-    ) {
-        assertValidContractAddress(address(_superchainConfig));
-        assertValidContractAddress(address(_protocolVersions));
-        superchainConfig = _superchainConfig;
-        protocolVersions = _protocolVersions;
-        L1_CONTRACTS_RELEASE = _l1ContractsRelease;
-
-        blueprint = _blueprints;
-        implementation = _implementations;
-        upgradeController = _upgradeController;
-    }
+    )
+        OPContractsBase(
+            _superchainConfig,
+            _protocolVersions,
+            _l1ContractsRelease,
+            _blueprints,
+            _implementations,
+            _upgradeController
+        )
+    { }
 
     // -------- Events --------
 

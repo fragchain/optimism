@@ -51,8 +51,9 @@ contract OPPrestateUpdater is OPContractsBase {
         string memory _l1ContractsRelease,
         Blueprints memory _blueprints,
         Implementations memory _implementations,
-        address _upgradeController /*
-        OPContractsManager(
+        address _upgradeController
+    )
+        OPContractsBase(
             _superchainConfig,
             _protocolVersions,
             _l1ContractsRelease,
@@ -60,8 +61,7 @@ contract OPPrestateUpdater is OPContractsBase {
             _implementations,
             _upgradeController
         )
-                                     */
-    ) { }
+    { }
 
     /// @notice Updates the prestate hash for a new game type while keeping all other parameters the same
     /// @param _prestateUpdateInputs The new prestate hash to use
